@@ -1,0 +1,13 @@
+make.sh <DIRECTORIO>
+
+	Compila con javac, todos los ficheros de <DIRECTORIO>/src del tipo .java
+	y coloca los .class en <DIRECTORIO>/bin
+
+run.sh <DIRECTORIO> <CLASE> <ARGUMENTOS...>
+
+	Ejecuta la clase <CLASE> del directorio <DIRECTORIO> con los argumentos
+	especificados en <ARGUMENTOS...>
+
+get-reuters.sh
+
+	Obtiene la bd de reuters, necesaria para la p1
