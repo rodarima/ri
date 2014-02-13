@@ -1,6 +1,5 @@
 #!/bin/bash
 
-LIB="/home/rodrigo/fic/3/ri/lib"
-BIN="/home/rodrigo/fic/3/ri/bin"
+LIB="../lib"
 
-java -cp "$BIN:$LIB/*" simpleindexing.SimpleIndexing $@
+java -cp "bin:$LIB/*" $@

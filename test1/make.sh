@@ -1,5 +1,7 @@
 #!/bin/bash
 
-LIB="/home/rodrigo/fic/3/ri/lib"
+LIB="../lib"
+SRC="./src"
 
-javac -verbose -d bin -cp "$LIB/*:src" src/simpleindexing/SimpleIndexing.java
+F=$(find $SRC -name "*.java")
+javac -verbose -d bin -cp "$LIB/*:src" $F
