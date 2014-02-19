@@ -4,6 +4,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
+import java.text.ParsePosition;
 
 public class Reuters21578Parser {
 
@@ -92,7 +93,7 @@ public class Reuters21578Parser {
 		String title = extract("TITLE", text, true);
 		String dateline = extract("DATELINE", text, true);
 		String body = extract("BODY", text, true);
-		String date = extract("DATE", text, true);
+		String text_date = extract("DATE", text, true);
 		
 		if (body.endsWith(END_BOILERPLATE_1)
 		{
@@ -105,7 +106,8 @@ public class Reuters21578Parser {
 			body = body.substring(0, last);
 		}
 
-		SimpleDateFormat("dd-MMM-yyyy HH:mm:ss.SS", Locale.US);
+		dateFormat = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss.SS", Locale.US);
+		Date date = dateFormat.parse(text_date, new ParsePosition(0));
 		//TODO: Interpretar hora
 
 		List<String> document = new LinkedList<String>();
@@ -119,8 +121,6 @@ public class Reuters21578Parser {
 		document.add(dateline);
 		return document;
 	}
-
-	private static Date
 
 	private static String extract(String elt, String text, boolean allowEmpty) {
 
