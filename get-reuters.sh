@@ -5,12 +5,10 @@ REUTERS_DIR="$DATA/reuters"
 REUTERS_TAR="reuters21578.tar.gz"
 OUT_TAR="$DATA/$REUTERS_TAR"
 
-test -e "$OUT_TAR" && exit
+test -d "$DATA" || mkdir -p "$DATA"
 
-wget http://kdd.ics.uci.edu//databases/reuters21578/reuters21578.tar.gz -O data/reuters21578.tar.gz
+test -e "$OUT_TAR" || wget http://kdd.ics.uci.edu//databases/reuters21578/reuters21578.tar.gz -O $OUT_TAR
 
-test -d "$REUTERS_DIR" && exit
-
-mkdir -p "$REUTERS_DIR"
+test -d "$REUTERS_DIR" || mkdir -p "$REUTERS_DIR"
 
 tar zxvf "$OUT_TAR" -C "$REUTERS_DIR"
