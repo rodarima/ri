@@ -2,6 +2,8 @@ package reuters21578indexing;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.text.SimpleDateFormat;
+import java.util.Locale;
 
 public class Reuters21578Parser {
 
@@ -10,8 +12,8 @@ public class Reuters21578Parser {
 	 * collection.
 	 */
 
-	private static final String END_BOILERPLATE_1 = "Reuter&#3;";
-	private static final String END_BOILERPLATE_2 = "REUTER&#3;";
+	private static final String END_BOILERPLATE_1 = "Reuter\n&#3;";
+	private static final String END_BOILERPLATE_2 = "REUTER\n&#3;";
 
 	// private static final String[] TOPICS = { "acq", "alum", "austdlr",
 	// "barley", "bean", "belly", "bfr", "bop", "cake", "can", "carcass",
@@ -90,18 +92,35 @@ public class Reuters21578Parser {
 		String title = extract("TITLE", text, true);
 		String dateline = extract("DATELINE", text, true);
 		String body = extract("BODY", text, true);
+		String date = extract("DATE", text, true);
+		
 		if (body.endsWith(END_BOILERPLATE_1)
-				|| body.endsWith(END_BOILERPLATE_2))
-			body = body
-					.substring(0, body.length() - END_BOILERPLATE_1.length());
+		{
+			int last = body.length() - END_BOILERPLATE_1.length();
+			body = body.substring(0, last);
+		}
+		else if (body.endsWith(END_BOILERPLATE_2))
+		{
+			int last = body.length() - END_BOILERPLATE_2.length();
+			body = body.substring(0, last);
+		}
+
+		SimpleDateFormat("dd-MMM-yyyy HH:mm:ss.SS", Locale.US);
+		//TODO: Interpretar hora
+
 		List<String> document = new LinkedList<String>();
 		document.add(title);
 		document.add(body);
-		document.add(topics.replaceAll("\\<D\\>", " ").replaceAll("\\<\\/D\\>",
-				""));
+		document.add(
+			topics.
+			replaceAll("\\<D\\>", " ").
+			replaceAll("\\<\\/D\\>","")
+		);
 		document.add(dateline);
 		return document;
 	}
+
+	private static Date
 
 	private static String extract(String elt, String text, boolean allowEmpty) {
 
