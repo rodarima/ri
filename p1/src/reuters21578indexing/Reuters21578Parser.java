@@ -8,8 +8,10 @@ import java.text.ParsePosition;
 import java.util.Date;
 
 import org.apache.lucene.document.DateTools;
+import org.apache.lucene.index.IndexWriterConfig;
 
-public class Reuters21578Parser {
+public class Reuters21578Parser
+{
 
 	/*
 	 * Project testlucene 3.6.0, the Reuters21578Parser class parses the
@@ -154,7 +156,169 @@ public class Reuters21578Parser {
 		return text.substring(start, end);
 	}
 
+
+	public static void main(String[] args)
+	{
+		String usage = 
+		"Este programa realiza operaciones de indexación en documentos Reuters.\n"+
+		"Uso del programa:\n"+
+		"    java reuters21578indexing.Reuters21578Parser ARGS\n"+
+		"Los argumentos \"ARGS\"  son los siguientes:\n"+
+		"\n"+
+		"[-openmode MODE]  Especifica MODE = { \"append\", \"create\", \"create_or_append\" }\n"+
+		"                  con el que se abrirá el índice. Si no se especifica se usa el\n"+
+		"                  valor por defecto \"create\"\n"+
+		"\n"+
+		"-index PATH       PATH es la carpeta en la que se almacenará el índice.\n"+
+		"\n"+
+		"-files PATH       PATH es la carpeta que contiene los archivos \"*.sgm\".\n"+
+		"\n"+
+		"[-onlyfiles N]    N es el número que especifica el fichero \"reut2-0NN.sgm\"\n"+
+		"                  donde N es un entero de 0 a 21 inclusive. Si no se\n"+
+		"                  especifica se usarán todos los ficheros \"*.sgm\" que se\n"+
+		"                  encuentren en el directorio.\n"+
+		"\n"+
+		"[-addsgmfile]     Incluye un campo adicional en el índice que contiene el\n"+
+		"                  nombre del archivo \"*.sgm\" donde se encuentra el artículo\n"+
+		"                  Reuters. Por defecto no se incluye.\n"+
+		"\n"+
+		"[-delete T F]     Borra los documentos del índice que contienen el término \"T\"\n"+
+		"                  en el campo \"F\"";
+
+		System.out.println(usage);
+
+		/* Valores por defecto */
+		IndexWriterConfig.OpenMode openMode = IndexWriterConfig.OpenMode.CREATE;
+		String index_path = null;
+		String files_path = null;
+		String onlyfiles_path = null;
+		boolean addsgmfile = false;
+		String delete_txt = null;
+		String delete_field = null;
+
+		/* Comprobaciones de opciones repetidas */
+		boolean openmode_status = false;
+		boolean index_status = false;
+		boolean files_status = false;
+		boolean onlyfiles_status = false;
+		boolean addsgmfile_status = false;
+		boolean delete_status = false;
+
+		for(int i=0; i<args.length; i++)
+		{
+			String arg = args[i];
+			if("-openmode".equals(arg))
+			{
+				if(openmode_status)
+				{
+					System.out.println("Modo de apertura \"-openmode\" repetido\n");
+					return;
+				}
+				openmode_status = true;
+				String mode = args[i+1];
+				if("append".equals(mode))
+					openMode = IndexWriterConfig.OpenMode.APPEND;
+				else if("create".equals(mode))
+					openMode = IndexWriterConfig.OpenMode.CREATE;
+				else if("create_or_append".equals(mode))
+					openMode = IndexWriterConfig.OpenMode.CREATE_OR_APPEND;
+				else
+				{
+					System.out.println("Modo de apertura desconocido\n");
+					return;
+				}
+				i++;
+			}
+			else if("-index".equals(arg))
+			{
+				if(index_status)
+				{
+					System.out.println("Carpeta de índice \"-index\" repetida\n");
+					return;
+				}
+				index_status = true;
+				String path = args[i+1];
+				index_path = path;
+				i++;
+			}
+			else if("-files".equals(arg))
+			{
+				if(files_status)
+				{
+					System.out.println("Carpeta de ficheros \"*.sgm\", \"-files\" repetida\n");
+					return;
+				}
+				files_status = true;
+				String path = args[i+1];
+				files_path = path;
+				i++;
+			}
+			else if("-onlyfiles".equals(arg))
+			{
+				if(onlyfiles_status)
+				{
+					System.out.println("Opción \"-onlyfiles\" repetida\n");
+					return;
+				}
+				onlyfiles_status = true;
+				String path = args[i+1];
+				onlyfiles_path = path;
+				i++;
+			}
+			else if("-addsgmfile".equals(arg))
+			{
+				if(addsgmfile_status)
+				{
+					System.out.println("Opción \"-addsgmfile\" repetida\n");
+					return;
+				}
+				addsgmfile_status = true;
+				addsgmfile = true;
+			}
+			else if("-delete".equals(arg))
+			{
+				if(delete_status)
+				{
+					System.out.println("Opción \"-delete\" repetida\n");
+					return;
+				}
+				delete_status = true;
+				String txt = args[i+1];
+				String field = args[i+2];
+
+				delete_txt = txt;
+				delete_field = field;
+			}
+		}
+
+		//TODO:Comprobar que todos los parametros obligatorios estén
+		// Los campos obligatorios son:
+		//  index_path y files_path
+
+		if(index_path == null)
+		{
+			System.out.println("Carpeta de índice no especificada\n");
+			return;
+		}
+		if(files_path == null)
+		{
+			System.out.println("Carpeta de ficheros \"*.sgm\" no especificada\n");
+			return;
+		}
+
+		System.out.println("Todo parece correcto\n");
+
+
+	}
+
 }
+
+
+
+
+
+
+
 
 
 //package org.apache.lucene.demo;
