@@ -16,4 +16,5 @@ shift
 
 test -d "$BIN" || mkdir -p "$BIN"
 
-find "$SRC" -name "*.java" -exec javac -verbose -d "$BIN" -cp "$LIB/*" "{}" \;
+#find "$SRC" -name "*.java" -exec javac -verbose -d "$BIN" -cp "$LIB/*" "{}" \;
+find "$SRC" -name "*.java" -exec javac -d "$BIN" -cp "$LIB/*" "{}" \;

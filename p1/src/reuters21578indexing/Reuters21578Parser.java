@@ -6,9 +6,34 @@ import java.text.SimpleDateFormat;
 import java.util.Locale;
 import java.text.ParsePosition;
 import java.util.Date;
+import java.lang.Integer;
+import java.io.File;
 
-import org.apache.lucene.document.DateTools;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.document.DateTools;
+import org.apache.lucene.document.Document;
+//import org.apache.lucene.analysis.Analyzer;
+//import org.apache.lucene.analysis.standard.StandardAnalyzer;
+//import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+//import org.apache.lucene.document.LongField;
+import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig.OpenMode;
+//import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.Term;
+//import org.apache.lucene.store.Directory;
+//import org.apache.lucene.store.FSDirectory;
+//import org.apache.lucene.util.Version;
+//
+//import java.io.BufferedReader;
+//import java.io.File;
+//import java.io.FileInputStream;
+//import java.io.FileNotFoundException;
+import java.io.IOException;
+//import java.io.InputStreamReader;
+//import java.util.Date;
 
 public class Reuters21578Parser
 {
@@ -21,27 +46,12 @@ public class Reuters21578Parser
 	private static final String END_BOILERPLATE_1 = " Reuter\n&#3;";
 	private static final String END_BOILERPLATE_2 = " REUTER\n&#3;";
 
-	// private static final String[] TOPICS = { "acq", "alum", "austdlr",
-	// "barley", "bean", "belly", "bfr", "bop", "cake", "can", "carcass",
-	// "castor", "castorseed", "cattle", "chem", "citruspulp", "cocoa",
-	// "coconut", "coffee", "copper", "copra", "corn", "cornglutenfeed",
-	// "cotton", "cottonseed", "cpi", "cpu", "crude", "cruzado", "debt",
-	// "dfl", "dkr", "dlr", "dmk", "earn", "f", "feed", "fishmeal",
-	// "fuel", "fx", "gas", "gnp", "gold", "grain", "groundnut", "heat",
-	// "hk", "hog", "housing", "income", "instal", "interest",
-	// "inventories", "ipi", "iron", "jet", "jobs", "l", "lead", "lei",
-	// "lin", "linseed", "lit", "livestock", "lumber", "meal", "metal",
-	// "money", "naphtha", "nat", "nickel", "nkr", "nzdlr", "oat", "oil",
-	// "oilseed", "orange", "palladium", "palm", "palmkernel", "peseta",
-	// "pet", "platinum", "plywood", "pork", "potato", "propane", "rand",
-	// "rape", "rapeseed", "red", "reserves", "retail", "rice", "ringgit",
-	// "rubber", "rupiah", "rye", "saudriyal", "sfr", "ship", "silver",
-	// "skr", "sorghum", "soy", "soybean", "steel", "stg", "strategic",
-	// "sugar", "sun", "sunseed", "supply", "tapioca", "tea", "tin",
-	// "trade", "veg", "wheat", "wool", "wpi", "yen", "zinc" };
-
-	public static List<List<String>> parseString(StringBuffer fileContent) {
-		/* First the contents are converted to a string */
+	public static void parseFile(IndexWriter writer, StringBuffer fileContent) throws IOException 
+	{
+		/* First the contents are converted to a string, and stored in RAM
+		 * 
+		 * FIXME: You need a HUGE RAM
+		 */
 		String text = fileContent.toString();
 
 		/*
@@ -51,20 +61,10 @@ public class Reuters21578Parser
 		 */
 		String[] lines = text.split("\n");
 
-		/*
-		 * For each Reuters article the parser returns a list of strings where
-		 * each element of the list is a field (TITLE, BODY, TOPICS, DATELINE).
-		 * Each *.sgm file that is passed in fileContent can contain many
-		 * Reuters articles, so finally the parser returns a list of list of
-		 * strings, i.e, a list of reuters articles, that is what the object
-		 * documents contains
-		 */
-
-		List<List<String>> documents = new LinkedList<List<String>>();
-
 		/* The tag REUTERS identifies the beginning and end of each article */
 
-		for (int i = 0; i < lines.length; ++i) {
+		for (int i = 0; i < lines.length; ++i)
+		{
 			if (!lines[i].startsWith("<REUTERS"))
 				continue;
 			StringBuilder sb = new StringBuilder();
@@ -72,18 +72,28 @@ public class Reuters21578Parser
 				sb.append(lines[i++]);
 				sb.append("\n");
 			}
-			/*
-			 * Here the sb object of the StringBuilder class contains the
-			 * Reuters article which is converted to text and passed to the
-			 * handle document method that will return the document in the form
-			 * of a list of fields
-			 */
-			documents.add(handleDocument(sb.toString()));
+
+			Document doc = handleDocument(sb.toString());
+
+			if (writer.getConfig().getOpenMode() == OpenMode.CREATE)
+			{
+				// New index, so we just add the document (no old document can be there):
+				writer.addDocument(doc);
+			}
+			else
+			{
+				// FIXME: Solo hace falta comprobar entre create y !create?
+
+				// Existing index (an old copy of this document may have been indexed) so 
+				// we use updateDocument instead to replace the old one matching the exact 
+				// path, if present:
+				System.out.print("Aún no implementado\n");
+				//writer.updateDocument(new Term("title", doc.get("title")), doc);
+			}
 		}
-		return documents;
 	}
 
-	public static List<String> handleDocument(String text) {
+	public static Document handleDocument(String text) {
 
 		/*
 		 * This method returns the Reuters article that is passed as text as a
@@ -110,21 +120,19 @@ public class Reuters21578Parser
 			int last = body.length() - END_BOILERPLATE_2.length();
 			body = body.substring(0, last);
 		}
+		
+		topics = topics.replaceAll("\\<D\\>", " ").replaceAll("\\<\\/D\\>","");
 
 		SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MMM-yyyy HH:mm:ss.SS", Locale.US);
 		Date date = dateFormat.parse(text_date, new ParsePosition(0));
 		String date_string = DateTools.dateToString(date, DateTools.Resolution.MILLISECOND);
 
-		List<String> document = new LinkedList<String>();
-		document.add(title);
-		document.add(body);
-		document.add(
-			topics.
-			replaceAll("\\<D\\>", " ").
-			replaceAll("\\<\\/D\\>","")
-		);
-		document.add(date_string);
-		return document;
+		Document doc = new Document();
+		doc.add(new StringField("title", title, Field.Store.YES));
+		doc.add(new TextField("contents", body, Field.Store.YES));
+		doc.add(new TextField("topics", topics, Field.Store.YES));
+		doc.add(new StringField("date", date_string, Field.Store.NO));
+		return doc;
 	}
 
 	private static String extract(String elt, String text, boolean allowEmpty) {
@@ -183,15 +191,19 @@ public class Reuters21578Parser
 		"                  Reuters. Por defecto no se incluye.\n"+
 		"\n"+
 		"[-delete T F]     Borra los documentos del índice que contienen el término \"T\"\n"+
-		"                  en el campo \"F\"";
+		"                  en el campo \"F\"\n";
 
-		System.out.println(usage);
+		if(args.length == 0)
+		{
+			System.out.print(usage);
+			return;
+		}
 
 		/* Valores por defecto */
 		IndexWriterConfig.OpenMode openMode = IndexWriterConfig.OpenMode.CREATE;
 		String index_path = null;
 		String files_path = null;
-		String onlyfiles_path = null;
+		int onlyfiles = -1;
 		boolean addsgmfile = false;
 		String delete_txt = null;
 		String delete_field = null;
@@ -211,10 +223,15 @@ public class Reuters21578Parser
 			{
 				if(openmode_status)
 				{
-					System.out.println("Modo de apertura \"-openmode\" repetido\n");
+					System.out.print("Opción \"-openmode\": Modo de apertura repetido\n");
 					return;
 				}
 				openmode_status = true;
+				if(i+1 >= args.length)
+				{
+					System.out.print("Opción \"-openmode\": Modo de apertura no especificado\n");
+					return;
+				}
 				String mode = args[i+1];
 				if("append".equals(mode))
 					openMode = IndexWriterConfig.OpenMode.APPEND;
@@ -224,7 +241,7 @@ public class Reuters21578Parser
 					openMode = IndexWriterConfig.OpenMode.CREATE_OR_APPEND;
 				else
 				{
-					System.out.println("Modo de apertura desconocido\n");
+					System.out.print("Opción \"-openmode\": Modo de apertura desconocido\n");
 					return;
 				}
 				i++;
@@ -233,11 +250,22 @@ public class Reuters21578Parser
 			{
 				if(index_status)
 				{
-					System.out.println("Carpeta de índice \"-index\" repetida\n");
+					System.out.print("Opción \"-index\": Carpeta de índice repetida\n");
 					return;
 				}
 				index_status = true;
+				if(i+1 >= args.length)
+				{
+					System.out.print("Opción \"-index\": Carpeta de índice no especificada\n");
+					return;
+				}
 				String path = args[i+1];
+				if(!is_readable_file(path))
+				{
+					System.out.print("Opción \"-index\": Carpeta de índice inexistente o ilegible\n");
+					return;
+				}
+				
 				index_path = path;
 				i++;
 			}
@@ -245,11 +273,21 @@ public class Reuters21578Parser
 			{
 				if(files_status)
 				{
-					System.out.println("Carpeta de ficheros \"*.sgm\", \"-files\" repetida\n");
+					System.out.print("Opción \"-files\": Carpeta de ficheros \"*.sgm\" repetida\n");
 					return;
 				}
 				files_status = true;
+				if(i+1 >= args.length)
+				{
+					System.out.print("Opción \"-files\": Carpeta de ficheros \"*.sgm\" no especificada\n");
+					return;
+				}
 				String path = args[i+1];
+				if(!is_readable_file(path))
+				{
+					System.out.print("Opción \"-files\": Carpeta de ficheros \"*.sgm\" inexistente o ilegible\n");
+					return;
+				}
 				files_path = path;
 				i++;
 			}
@@ -257,19 +295,39 @@ public class Reuters21578Parser
 			{
 				if(onlyfiles_status)
 				{
-					System.out.println("Opción \"-onlyfiles\" repetida\n");
+					System.out.print("Opción \"-onlyfiles\" repetida\n");
 					return;
 				}
 				onlyfiles_status = true;
-				String path = args[i+1];
-				onlyfiles_path = path;
+				if(i+1 >= args.length)
+				{
+					System.out.print("Opción \"-onlyfiles\": Número de fichero no especificada\n");
+					return;
+				}
+				String n_txt = args[i+1];
+				int n = -1;
+				try
+				{
+					n = Integer.parseInt(n_txt);
+				}
+				catch(Exception e)
+				{
+					System.out.print("Opción \"-onlyfiles\": No se pudo convertir a un entero\n");
+					return;
+				}
+				if((n<0) || (n>21))
+				{
+					System.out.print("Opción \"-onlyfiles\": Sólo se permite el rango de 0 a 21 inclusive\n");
+					return;
+				}
+				onlyfiles = n;
 				i++;
 			}
 			else if("-addsgmfile".equals(arg))
 			{
 				if(addsgmfile_status)
 				{
-					System.out.println("Opción \"-addsgmfile\" repetida\n");
+					System.out.print("Opción \"-addsgmfile\" repetida\n");
 					return;
 				}
 				addsgmfile_status = true;
@@ -279,36 +337,61 @@ public class Reuters21578Parser
 			{
 				if(delete_status)
 				{
-					System.out.println("Opción \"-delete\" repetida\n");
+					System.out.print("Opción \"-delete\" repetida\n");
 					return;
 				}
 				delete_status = true;
+				if(i+1 >= args.length)
+				{
+					System.out.print("Opción \"-delete\": Término \"T\" no especificado.\n");
+					return;
+				}
 				String txt = args[i+1];
+				if(i+2 >= args.length)
+				{
+					System.out.print("Opción \"-delete\": Campo \"F\" no especificado.\n");
+					return;
+				}
 				String field = args[i+2];
 
 				delete_txt = txt;
 				delete_field = field;
+				i+=2;
+			}
+			else
+			{
+				System.out.print("Opción \""+arg+"\" desconocida\n");
+				return;
 			}
 		}
 
-		//TODO:Comprobar que todos los parametros obligatorios estén
+		// Comprobar que todos los parametros obligatorios estén
 		// Los campos obligatorios son:
 		//  index_path y files_path
 
 		if(index_path == null)
 		{
-			System.out.println("Carpeta de índice no especificada\n");
+			System.out.print("Falta la opción \"-index\": Carpeta de índice no especificada\n");
 			return;
 		}
 		if(files_path == null)
 		{
-			System.out.println("Carpeta de ficheros \"*.sgm\" no especificada\n");
+			System.out.print("Falta la opción \"-files\": Carpeta de ficheros \"*.sgm\" no especificada\n");
 			return;
 		}
 
-		System.out.println("Todo parece correcto\n");
+		System.out.print("Todo parece correcto\n");
 
+	}
 
+	private static boolean is_readable_file(String path)
+	{
+		File f = new File(path);
+		if (!f.exists() || !f.canRead())
+		{
+			return false;
+		}
+		return true;
 	}
 
 }
@@ -414,19 +497,19 @@ public class Reuters21578Parser
 //		}
 //
 //		if (docsPath == null) {
-//			System.err.println("Usage: " + usage);
+//			System.err.print("Usage: " + usage);
 //			System.exit(1);
 //		}
 //
 //		final File docDir = new File(docsPath);
 //		if (!docDir.exists() || !docDir.canRead()) {
-//			System.out.println("Document directory '" +docDir.getAbsolutePath()+ "' does not exist or is not readable, please check the path");
+//			System.out.print("Document directory '" +docDir.getAbsolutePath()+ "' does not exist or is not readable, please check the path");
 //			System.exit(1);
 //		}
 //		
 //		Date start = new Date();
 //		try {
-//			System.out.println("Indexing to directory '" + indexPath + "'...");
+//			System.out.print("Indexing to directory '" + indexPath + "'...");
 //
 //			Directory dir = FSDirectory.open(new File(indexPath));
 //			Analyzer analyzer = new StandardAnalyzer(Version.LUCENE_40);
@@ -462,10 +545,10 @@ public class Reuters21578Parser
 //			writer.close();
 //
 //			Date end = new Date();
-//			System.out.println(end.getTime() - start.getTime() + " total milliseconds");
+//			System.out.print(end.getTime() - start.getTime() + " total milliseconds");
 //
 //		} catch (IOException e) {
-//			System.out.println(" caught a " + e.getClass() +
+//			System.out.print(" caught a " + e.getClass() +
 //			 "\n with message: " + e.getMessage());
 //		}
 //	}
@@ -537,13 +620,13 @@ public class Reuters21578Parser
 //
 //					if (writer.getConfig().getOpenMode() == OpenMode.CREATE) {
 //						// New index, so we just add the document (no old document can be there):
-//						System.out.println("adding " + file);
+//						System.out.print("adding " + file);
 //						writer.addDocument(doc);
 //					} else {
 //						// Existing index (an old copy of this document may have been indexed) so 
 //						// we use updateDocument instead to replace the old one matching the exact 
 //						// path, if present:
-//						System.out.println("updating " + file);
+//						System.out.print("updating " + file);
 //						writer.updateDocument(new Term("path", file.getPath()), doc);
 //					}
 //					
