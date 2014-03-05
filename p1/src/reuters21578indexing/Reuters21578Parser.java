@@ -83,12 +83,12 @@ public class Reuters21578Parser
 			else
 			{
 				// FIXME: Solo hace falta comprobar entre create y !create?
+				
+				/* Add new files without checking if they are duplicated or
+				 * deprecated */
 
-				// Existing index (an old copy of this document may have been indexed) so 
-				// we use updateDocument instead to replace the old one matching the exact 
-				// path, if present:
-				System.out.print("Aún no implementado\n");
-				//writer.updateDocument(new Term("title", doc.get("title")), doc);
+				System.out.print("Warning: Añadiendo documentos sin comprobar duplicados...\n");
+				writer.addDocument(doc);
 			}
 		}
 	}
@@ -200,7 +200,7 @@ public class Reuters21578Parser
 		}
 
 		/* Valores por defecto */
-		IndexWriterConfig.OpenMode openMode = IndexWriterConfig.OpenMode.CREATE;
+		IndexWriterConfig.OpenMode open_mode = IndexWriterConfig.OpenMode.CREATE;
 		String index_path = null;
 		String files_path = null;
 		int onlyfiles = -1;
@@ -234,11 +234,11 @@ public class Reuters21578Parser
 				}
 				String mode = args[i+1];
 				if("append".equals(mode))
-					openMode = IndexWriterConfig.OpenMode.APPEND;
+					open_mode = IndexWriterConfig.OpenMode.APPEND;
 				else if("create".equals(mode))
-					openMode = IndexWriterConfig.OpenMode.CREATE;
+					open_mode = IndexWriterConfig.OpenMode.CREATE;
 				else if("create_or_append".equals(mode))
-					openMode = IndexWriterConfig.OpenMode.CREATE_OR_APPEND;
+					open_mode = IndexWriterConfig.OpenMode.CREATE_OR_APPEND;
 				else
 				{
 					System.out.print("Opción \"-openmode\": Modo de apertura desconocido\n");
@@ -265,6 +265,11 @@ public class Reuters21578Parser
 					System.out.print("Opción \"-index\": Carpeta de índice inexistente o ilegible\n");
 					return;
 				}
+				if(!is_dir(path))
+				{
+					System.out.print("Opción \"-index\": No es una carpeta\n");
+					return;
+				}
 				
 				index_path = path;
 				i++;
@@ -286,6 +291,11 @@ public class Reuters21578Parser
 				if(!is_readable_file(path))
 				{
 					System.out.print("Opción \"-files\": Carpeta de ficheros \"*.sgm\" inexistente o ilegible\n");
+					return;
+				}
+				if(!is_dir(path))
+				{
+					System.out.print("Opción \"-files\": No es una carpeta\n");
 					return;
 				}
 				files_path = path;
@@ -382,6 +392,52 @@ public class Reuters21578Parser
 
 		System.out.print("Todo parece correcto\n");
 
+		IndexWriter iw = create_index_writer(index_path, open_mode);
+
+
+	}
+
+	private static IndexWriter create_index_writer(String indexPath,
+		IndexWriterConfig.OpenMode openMode)
+	{
+		Directory dir = FSDirectory.open(new File(indexPath));
+		Analyzer analyzer = new StandardAnalyzer(Version.LUCENE_40);
+		IndexWriterConfig iwc = new IndexWriterConfig(Version.LUCENE_40, analyzer);
+		iwc.setOpenMode(openMode);
+		iwc.setRAMBufferSizeMB(256.0);
+		IndexWriter writer = new IndexWriter(dir, iwc);
+
+		return writer;
+		//indexDocs(writer, docDir);
+	}
+
+	private static void index_sgm(String files_path, IndexWriter iw)
+	{
+		File dir = new File(files_path);
+		String[] files = file.list();
+
+		/* Filter sgm files only */
+		FilenameFilter ffsgm = new FilenameFilter()
+		{
+			public boolean accept(File directory, String fileName)
+			{
+				return fileName.toLowerCase().endsWith(".sgm");
+			}
+		};
+		String[] sgm_files = dir.list(ffsgm);
+		for(String sgm_file : sgm_files)
+		{
+			BufferedReader br = new BufferedReader(
+				new InputStreamReader(new FileInputStream(file), "UTF-8"));
+
+			parseFile(br, iw);
+		}
+	}
+
+	static String readFile(String path, Charset encoding) throws IOException 
+	{
+		byte[] encoded = Files.readAllBytes(Paths.get(path));
+		return encoding.decode(ByteBuffer.wrap(encoded)).toString();
 	}
 
 	private static boolean is_readable_file(String path)
@@ -392,6 +448,11 @@ public class Reuters21578Parser
 			return false;
 		}
 		return true;
+	}
+	private static boolean is_dir(String path)
+	{
+		File f = new File(path);
+		return f.isDirectory();
 	}
 
 }
