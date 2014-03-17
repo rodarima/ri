@@ -12,9 +12,8 @@ import java.io.File;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.document.DateTools;
 import org.apache.lucene.document.Document;
-//import org.apache.lucene.analysis.Analyzer;
-//import org.apache.lucene.analysis.standard.StandardAnalyzer;
-//import org.apache.lucene.document.Document;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Field;
 //import org.apache.lucene.document.LongField;
 import org.apache.lucene.document.StringField;
@@ -23,15 +22,20 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 //import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.Term;
-//import org.apache.lucene.store.Directory;
-//import org.apache.lucene.store.FSDirectory;
-//import org.apache.lucene.util.Version;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.util.Version;
 //
 //import java.io.BufferedReader;
 //import java.io.File;
 //import java.io.FileInputStream;
 //import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
+import java.io.FilenameFilter;
+import java.nio.file.Files;
+import java.nio.ByteBuffer;
 //import java.io.InputStreamReader;
 //import java.util.Date;
 
@@ -46,13 +50,13 @@ public class Reuters21578Parser
 	private static final String END_BOILERPLATE_1 = " Reuter\n&#3;";
 	private static final String END_BOILERPLATE_2 = " REUTER\n&#3;";
 
-	public static void parseFile(IndexWriter writer, StringBuffer fileContent) throws IOException 
+	public static void parseFile(IndexWriter writer, String text, String sgm_file) throws IOException 
 	{
 		/* First the contents are converted to a string, and stored in RAM
 		 * 
 		 * FIXME: You need a HUGE RAM
 		 */
-		String text = fileContent.toString();
+		//String text = fileContent.toString();
 
 		/*
 		 * The method split of the String class splits the strings using the
@@ -62,6 +66,10 @@ public class Reuters21578Parser
 		String[] lines = text.split("\n");
 
 		/* The tag REUTERS identifies the beginning and end of each article */
+		if (writer.getConfig().getOpenMode() != OpenMode.CREATE)
+		{
+			System.out.print("Warning: Añadiendo documentos sin comprobar duplicados...\n");
+		}
 
 		for (int i = 0; i < lines.length; ++i)
 		{
@@ -74,6 +82,10 @@ public class Reuters21578Parser
 			}
 
 			Document doc = handleDocument(sb.toString());
+			if(sgm_file != null)
+			{
+				doc.add(new StringField("filename", sgm_file, Field.Store.YES));
+			}
 
 			if (writer.getConfig().getOpenMode() == OpenMode.CREATE)
 			{
@@ -87,7 +99,6 @@ public class Reuters21578Parser
 				/* Add new files without checking if they are duplicated or
 				 * deprecated */
 
-				System.out.print("Warning: Añadiendo documentos sin comprobar duplicados...\n");
 				writer.addDocument(doc);
 			}
 		}
@@ -128,10 +139,11 @@ public class Reuters21578Parser
 		String date_string = DateTools.dateToString(date, DateTools.Resolution.MILLISECOND);
 
 		Document doc = new Document();
-		doc.add(new StringField("title", title, Field.Store.YES));
+		doc.add(new TextField("title", title, Field.Store.YES));
 		doc.add(new TextField("contents", body, Field.Store.YES));
 		doc.add(new TextField("topics", topics, Field.Store.YES));
-		doc.add(new StringField("date", date_string, Field.Store.NO));
+		doc.add(new TextField("dateline", dateline, Field.Store.YES));
+		doc.add(new StringField("date", date_string, Field.Store.YES));
 		return doc;
 	}
 
@@ -163,7 +175,6 @@ public class Reuters21578Parser
 					+ text);
 		return text.substring(start, end);
 	}
-
 
 	public static void main(String[] args)
 	{
@@ -384,7 +395,7 @@ public class Reuters21578Parser
 			System.out.print("Falta la opción \"-index\": Carpeta de índice no especificada\n");
 			return;
 		}
-		if(files_path == null)
+		if(files_path == null && !delete_status)
 		{
 			System.out.print("Falta la opción \"-files\": Carpeta de ficheros \"*.sgm\" no especificada\n");
 			return;
@@ -392,13 +403,42 @@ public class Reuters21578Parser
 
 		System.out.print("Todo parece correcto\n");
 
-		IndexWriter iw = create_index_writer(index_path, open_mode);
+		String only_files_string = "";
+		if(onlyfiles > -1)
+		{
+			only_files_string = String.format("%03d", onlyfiles);
+		}
+
+		if(delete_status)
+		{
+			try
+			{
+				delete_terms(index_path, delete_field, delete_txt);
+			}
+			catch(IOException ioe)
+			{
+				System.out.print("Se produjo una excepción IOException. Abortando...\n");
+			}
+			return;
+		}
+
+		try
+		{
+			IndexWriter iw = create_index_writer(index_path, open_mode);
+			index_sgm(files_path, iw, only_files_string, addsgmfile);
+			iw.close();
+		}
+		catch(IOException ioe)
+		{
+			System.out.print("Se produjo una excepción IOException. Abortando...\n");
+			return;
+		}
 
 
 	}
 
 	private static IndexWriter create_index_writer(String indexPath,
-		IndexWriterConfig.OpenMode openMode)
+		IndexWriterConfig.OpenMode openMode) throws IOException
 	{
 		Directory dir = FSDirectory.open(new File(indexPath));
 		Analyzer analyzer = new StandardAnalyzer(Version.LUCENE_40);
@@ -411,32 +451,45 @@ public class Reuters21578Parser
 		//indexDocs(writer, docDir);
 	}
 
-	private static void index_sgm(String files_path, IndexWriter iw)
+	private static void delete_terms(String index_path, String F, String T) throws IOException
+	{
+		IndexWriter iw = create_index_writer(index_path, IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
+		iw.deleteDocuments(new Term(F, T));
+		iw.forceMergeDeletes();
+		iw.commit();
+		iw.close();
+	}
+
+	private static void index_sgm(String files_path, IndexWriter iw,
+		final String only, boolean add_sgm_file) throws IOException
 	{
 		File dir = new File(files_path);
-		String[] files = file.list();
+		//String[] files = dir.list();
 
 		/* Filter sgm files only */
 		FilenameFilter ffsgm = new FilenameFilter()
 		{
 			public boolean accept(File directory, String fileName)
 			{
-				return fileName.toLowerCase().endsWith(".sgm");
+				return fileName.toLowerCase().endsWith(only+".sgm");
 			}
 		};
-		String[] sgm_files = dir.list(ffsgm);
-		for(String sgm_file : sgm_files)
+		File[] sgm_files = dir.listFiles(ffsgm);
+		for(File sgm_file : sgm_files)
 		{
-			BufferedReader br = new BufferedReader(
-				new InputStreamReader(new FileInputStream(file), "UTF-8"));
+			//BufferedReader br = new BufferedReader(
+			//	new InputStreamReader(new FileInputStream(file), "UTF-8"));
+			System.out.print("Indizando (" + sgm_file.getName() + ")...\n");
+			String name = null;
+			if(add_sgm_file) name = sgm_file.getName();
 
-			parseFile(br, iw);
+			parseFile(iw, readFile(sgm_file, StandardCharsets.UTF_8), name);
 		}
 	}
 
-	static String readFile(String path, Charset encoding) throws IOException 
+	static String readFile(File file, Charset encoding) throws IOException 
 	{
-		byte[] encoded = Files.readAllBytes(Paths.get(path));
+		byte[] encoded = Files.readAllBytes(file.toPath());
 		return encoding.decode(ByteBuffer.wrap(encoded)).toString();
 	}
 
