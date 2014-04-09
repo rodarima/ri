@@ -25,6 +25,11 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.Version;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.CorruptIndexException;
+import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.store.FSDirectory;
 //
 //import java.io.BufferedReader;
 //import java.io.File;
@@ -92,7 +97,7 @@ public static void usage()
 	"                  a \"J\". Equivale a -indexdocsij\n"+
 	"\n"+
 	"-merge A B        Fusiona el índice contenido en la carpeta \"A\" con el contenido en la\n"+
-	"                  carpeta index2, el resultado fusionado está en index2. Equivale a\n"+
+	"                  carpeta \"B\", el resultado fusionado está en \"B\". Equivale a\n"+
 	"                  -mergeindexes\n"+
 	"";
 	
@@ -271,6 +276,23 @@ public static void main(String[] args)
 	}
 
 	System.out.print("Argumentos correctos\n");
+
+	try
+	{
+		DirectoryReader reader = indexReader(index_path);
+	}
+	catch (IOException e)
+	{
+		System.out.print("No se pudo abrir el índice para leer\n");
+	}
+
+}
+
+private static DirectoryReader indexReader(String file) throws IOException
+{
+	Directory dir = FSDirectory.open(new File(file));
+	DirectoryReader reader = DirectoryReader.open(dir);
+	return reader;
 }
 
 private static boolean is_readable_file(String path)
