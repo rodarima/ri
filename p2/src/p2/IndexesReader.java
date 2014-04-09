@@ -30,6 +30,18 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.index.CompositeReader;
+import org.apache.lucene.index.CorruptIndexException;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.DocsEnum;
+import org.apache.lucene.index.Fields;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.SlowCompositeReaderWrapper;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
 //
 //import java.io.BufferedReader;
 //import java.io.File;
@@ -206,6 +218,8 @@ public static void main(String[] args)
 			op = 4;
 			arg1 = args[++i];
 			arg2 = args[++i];
+			if(!is_integer(arg1)) return;
+			n1 = Integer.parseInt(arg1);
 		}
 		else if("-t-".equals(arg) || "-termsdflessthan".equals(arg))
 		{
@@ -214,6 +228,8 @@ public static void main(String[] args)
 			op = 5;
 			arg1 = args[++i];
 			arg2 = args[++i];
+			if(!is_integer(arg1)) return;
+			n1 = Integer.parseInt(arg1);
 		}
 		else if("-t".equals(arg) || "-termsdfrango".equals(arg))
 		{
@@ -223,6 +239,10 @@ public static void main(String[] args)
 			arg1 = args[++i];
 			arg2 = args[++i];
 			arg3 = args[++i];
+			if(!is_integer(arg1)) return;
+			if(!is_integer(arg2)) return;
+			n1 = Integer.parseInt(arg1);
+			n2 = Integer.parseInt(arg2);
 		}
 		else if("-i+".equals(arg) || "-indexdocstermsdfmorethan".equals(arg))
 		{
@@ -286,7 +306,7 @@ public static void main(String[] args)
 		return;
 	}
 
-	System.out.print("Argumentos correctos\n");
+	//System.out.print("Argumentos correctos\n");
 	DirectoryReader reader = null;
 	try
 	{
@@ -305,6 +325,13 @@ public static void main(String[] args)
 		case 2:	showDoc(reader, n1, n2+1);
 			break;
 		case 3: dumpDocs(reader, arg1);
+			break;
+		case 4: showFreq(reader, n1, -1, arg2);
+			break;
+		case 5: showFreq(reader, -1, n1, arg2);
+			break;
+		case 6: showFreq(reader, n1, n2, arg3);
+			break;
 	}
 }
 
@@ -327,6 +354,42 @@ private static void dumpDocs(DirectoryReader reader, String path)
 	}
 	showDocOn(reader, 0, reader.maxDoc(), writer);
 	writer.close();
+}
+
+private static void showFreq(DirectoryReader reader, int min, int max, String f)
+{
+	SlowCompositeReaderWrapper atomicReader;
+	try
+	{
+		atomicReader = new SlowCompositeReaderWrapper((CompositeReader) reader);
+
+		Fields fields = null;
+		Terms terms = null;
+		TermsEnum termsEnum = null;
+
+		fields = atomicReader.fields();
+		for (String field : fields)
+		{
+			if(field.equals(f))
+			{
+				terms = fields.terms(field);
+				termsEnum = terms.iterator(null);
+				while (termsEnum.next() != null)
+				{
+					int docFreq = termsEnum.docFreq();
+					if((min >= 0) && (docFreq < min)) continue;
+					if((max >= 0) && (docFreq > max)) continue;
+					String tt = termsEnum.term().utf8ToString();
+					System.out.println(termsEnum.totalTermFreq() + "\t" + termsEnum.docFreq() + "\t" + tt);
+				}
+			}
+		}
+	}
+	catch(Exception e)
+	{
+		System.out.println("Error al abrir el índice");
+		return;
+	}
 }
 
 private static void showDocOn(DirectoryReader reader, int min, int max, PrintStream out)
