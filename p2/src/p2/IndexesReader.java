@@ -322,7 +322,7 @@ private static void dumpDocs(DirectoryReader reader, String path)
 	}
 	catch(FileNotFoundException e)
 	{
-		System.out.println("No se pudo encontrar la ruta");
+		System.out.println("Error al abrir el fichero " + path);
 		return;
 	}
 	showDocOn(reader, 0, reader.maxDoc(), writer);
