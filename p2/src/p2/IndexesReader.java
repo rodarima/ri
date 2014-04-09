@@ -111,9 +111,8 @@ public static void usage()
 	"-id I J PATH      Construye un índice en la carpeta \"PATH\" con los docs del rango \"I\"\n"+
 	"                  a \"J\". Equivale a -indexdocsij\n"+
 	"\n"+
-	"-merge A B        Fusiona el índice contenido en la carpeta \"A\" con el contenido en la\n"+
-	"                  carpeta \"B\", el resultado fusionado está en \"B\". Equivale a\n"+
-	"                  -mergeindexes\n"+
+	"-merge A B        Fusiona el índice con el contenido en la carpeta \"A\", el resultado\n"+
+	"                  fusionado está en \"B\". Equivale a -mergeindexes\n"+
 	"";
 	
 	System.out.print(usage);
@@ -358,7 +357,20 @@ public static void main(String[] args)
 			break;
 
 		case 11:mergeDocs(reader, arg1, arg2);
+			break;
 
+		default:
+			System.out.println("PANIC\n");
+			return;
+	}
+	try
+	{
+		reader.close();
+	}
+	catch (IOException e)
+	{
+		System.out.print("No se pudo cerrar el índice\n");
+		return;
 	}
 }
 
@@ -393,6 +405,7 @@ private static void mergeDocs(DirectoryReader reader, String A, String B)
 			writer.addDocument(readerA.document(i));
 		}
 
+		readerA.close();
 		writer.commit();
 		writer.close();
 	}
@@ -540,6 +553,7 @@ private static void showFreq(DirectoryReader reader, int min, int max, String f)
 				}
 			}
 		}
+		atomicReader.close();
 	}
 	catch(Exception e)
 	{
