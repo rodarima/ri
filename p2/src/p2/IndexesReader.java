@@ -34,13 +34,15 @@ import org.apache.lucene.store.FSDirectory;
 //import java.io.BufferedReader;
 //import java.io.File;
 //import java.io.FileInputStream;
-//import java.io.FileNotFoundException;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.Charset;
 import java.io.FilenameFilter;
 import java.nio.file.Files;
 import java.nio.ByteBuffer;
+import java.io.PrintWriter;
+import java.io.PrintStream;
 //import java.io.InputStreamReader;
 //import java.util.Date;
 
@@ -128,6 +130,9 @@ public static void main(String[] args)
 	String arg2 = null;
 	String arg3 = null;
 	String arg4 = null;
+	int n1 = -1;
+	int n2 = -1;
+	int n3 = -1;
 
 	boolean index_status = false;
 	boolean operation_status = false;
@@ -172,6 +177,8 @@ public static void main(String[] args)
 			if(!testArgs(args, i, 1)) return;
 			op = 1;
 			arg1 = args[++i];
+			if(!is_integer(arg1)) return;
+			n1 = Integer.parseInt(arg1);
 		}
 		else if("-docs".equals(arg))
 		{
@@ -180,6 +187,10 @@ public static void main(String[] args)
 			op = 2;
 			arg1 = args[++i];
 			arg2 = args[++i];
+			if(!is_integer(arg1)) return;
+			if(!is_integer(arg2)) return;
+			n1 = Integer.parseInt(arg1);
+			n2 = Integer.parseInt(arg2);
 		}
 		else if("-write".equals(arg))
 		{
@@ -276,16 +287,74 @@ public static void main(String[] args)
 	}
 
 	System.out.print("Argumentos correctos\n");
-
+	DirectoryReader reader = null;
 	try
 	{
-		DirectoryReader reader = indexReader(index_path);
+		reader = indexReader(index_path);
 	}
 	catch (IOException e)
 	{
 		System.out.print("No se pudo abrir el índice para leer\n");
+		return;
 	}
 
+	switch(op)
+	{
+		case 1:	showDoc(reader, n1, n2+1);
+			break;
+		case 2:	showDoc(reader, n1, n2+1);
+			break;
+		case 3: dumpDocs(reader, arg1);
+	}
+}
+
+private static void showDoc(DirectoryReader reader, int min, int max)
+{
+	showDocOn(reader, min, max, System.out);
+}
+
+private static void dumpDocs(DirectoryReader reader, String path)
+{
+	PrintStream writer;
+	try
+	{
+		writer = new PrintStream(path);
+	}
+	catch(FileNotFoundException e)
+	{
+		System.out.println("No se pudo encontrar la ruta");
+		return;
+	}
+	showDocOn(reader, 0, reader.maxDoc(), writer);
+	writer.close();
+}
+
+private static void showDocOn(DirectoryReader reader, int min, int max, PrintStream out)
+{
+	if(reader.maxDoc() < max) max = reader.maxDoc();
+	Document doc = null;
+	for (int i = min; i < max; i++)
+	{
+		try
+		{
+			doc = reader.document(i);
+		}
+		catch(CorruptIndexException e1)
+		{
+			System.out.println("Graceful message: exception " + e1);
+			e1.printStackTrace();
+		}
+		catch(IOException e1)
+		{
+			System.out.println("Graceful message: exception " + e1);
+			e1.printStackTrace();
+		}
+		out.println("Document: " + i);
+		out.println("Title: " + doc.get("title"));
+		out.println("Date: " + doc.get("date"));
+		out.println("Topics: " + doc.get("topics"));
+		out.println("Contents: " + doc.get("contents"));
+	}
 }
 
 private static DirectoryReader indexReader(String file) throws IOException
@@ -293,6 +362,21 @@ private static DirectoryReader indexReader(String file) throws IOException
 	Directory dir = FSDirectory.open(new File(file));
 	DirectoryReader reader = DirectoryReader.open(dir);
 	return reader;
+}
+
+private static boolean is_integer(String n_txt)
+{
+	int n = -1;
+	try
+	{
+		n = Integer.parseInt(n_txt);
+		return true;
+	}
+	catch(Exception e)
+	{
+		System.out.print("La cadena "+n_txt+" no se pudo convertir a un entero\n");
+		return false;
+	}
 }
 
 private static boolean is_readable_file(String path)
