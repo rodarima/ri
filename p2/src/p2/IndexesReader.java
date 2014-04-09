@@ -289,6 +289,10 @@ public static void main(String[] args)
 			arg1 = args[++i];
 			arg2 = args[++i];
 			arg3 = args[++i];
+			if(!is_integer(arg1)) return;
+			if(!is_integer(arg2)) return;
+			n1 = Integer.parseInt(arg1);
+			n2 = Integer.parseInt(arg2);
 		}
 		else if("-merge".equals(arg) || "-mergeindexes".equals(arg))
 		{
@@ -349,6 +353,12 @@ public static void main(String[] args)
 			break;
 		case 9: indexFreq(reader, n1, n2, arg3, arg4);
 			break;
+
+		case 10:indexDocs(reader, n1, n2+1, arg3);
+			break;
+
+		case 11:mergeDocs(reader, arg1, arg2);
+
 	}
 }
 
@@ -364,6 +374,56 @@ private static IndexWriter create_index_writer(String indexPath,
 
 	return writer;
 	//indexDocs(writer, docDir);
+}
+
+private static void mergeDocs(DirectoryReader reader, String A, String B)
+{
+	IndexWriter writer = null;
+	try
+	{
+		writer = create_index_writer(B, IndexWriterConfig.OpenMode.CREATE);
+		Document doc = null;
+		for (int i = 0; i < reader.maxDoc(); i++)
+		{
+			writer.addDocument(reader.document(i));
+		}
+		DirectoryReader readerA = indexReader(A);
+		for (int i = 0; i < readerA.maxDoc(); i++)
+		{
+			writer.addDocument(readerA.document(i));
+		}
+
+		writer.commit();
+		writer.close();
+	}
+	catch(Exception e)
+	{
+		System.out.println("Error al crear el índice");
+		e.printStackTrace();
+		return;
+	}
+}
+
+private static void indexDocs(DirectoryReader reader, int min, int max, String path)
+{
+	if(reader.maxDoc() < max) max = reader.maxDoc();
+	IndexWriter writer = null;
+	try
+	{
+		writer = create_index_writer(path, IndexWriterConfig.OpenMode.CREATE);
+		Document doc = null;
+		for (int i = min; i < max; i++)
+		{
+			writer.addDocument(reader.document(i));
+		}
+		writer.commit();
+		writer.close();
+	}
+	catch(Exception e)
+	{
+		System.out.println("Error al crear el índice");
+		return;
+	}
 }
 
 private static void indexFreq(DirectoryReader reader, int min, int max, String f, String path)
