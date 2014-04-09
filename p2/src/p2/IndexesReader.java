@@ -55,6 +55,7 @@ import java.nio.file.Files;
 import java.nio.ByteBuffer;
 import java.io.PrintWriter;
 import java.io.PrintStream;
+import java.util.HashSet;
 //import java.io.InputStreamReader;
 //import java.util.Date;
 
@@ -252,6 +253,8 @@ public static void main(String[] args)
 			arg1 = args[++i];
 			arg2 = args[++i];
 			arg3 = args[++i];
+			if(!is_integer(arg1)) return;
+			n1 = Integer.parseInt(arg1);
 		}
 		else if("-i-".equals(arg) || "-indexdocstermsdflessthan".equals(arg))
 		{
@@ -261,6 +264,8 @@ public static void main(String[] args)
 			arg1 = args[++i];
 			arg2 = args[++i];
 			arg3 = args[++i];
+			if(!is_integer(arg1)) return;
+			n1 = Integer.parseInt(arg1);
 		}
 		else if("-i".equals(arg) || "-indexdocstermsdfrango".equals(arg))
 		{
@@ -271,6 +276,10 @@ public static void main(String[] args)
 			arg2 = args[++i];
 			arg3 = args[++i];
 			arg4 = args[++i];
+			if(!is_integer(arg1)) return;
+			if(!is_integer(arg2)) return;
+			n1 = Integer.parseInt(arg1);
+			n2 = Integer.parseInt(arg2);
 		}
 		else if("-id".equals(arg) || "-indexdocsij".equals(arg))
 		{
@@ -320,18 +329,105 @@ public static void main(String[] args)
 
 	switch(op)
 	{
-		case 1:	showDoc(reader, n1, n2+1);
+		case 1:	showDoc(reader, n1, n1+1);
 			break;
 		case 2:	showDoc(reader, n1, n2+1);
 			break;
 		case 3: dumpDocs(reader, arg1);
 			break;
+		
 		case 4: showFreq(reader, n1, -1, arg2);
 			break;
 		case 5: showFreq(reader, -1, n1, arg2);
 			break;
 		case 6: showFreq(reader, n1, n2, arg3);
 			break;
+
+		case 7: indexFreq(reader, n1, -1, arg2, arg3);
+			break;
+		case 8: indexFreq(reader, -1, n1, arg2, arg3);
+			break;
+		case 9: indexFreq(reader, n1, n2, arg3, arg4);
+			break;
+	}
+}
+
+private static IndexWriter create_index_writer(String indexPath,
+	IndexWriterConfig.OpenMode openMode) throws IOException
+{
+	Directory dir = FSDirectory.open(new File(indexPath));
+	Analyzer analyzer = new StandardAnalyzer(Version.LUCENE_40);
+	IndexWriterConfig iwc = new IndexWriterConfig(Version.LUCENE_40, analyzer);
+	iwc.setOpenMode(openMode);
+	iwc.setRAMBufferSizeMB(256.0);
+	IndexWriter writer = new IndexWriter(dir, iwc);
+
+	return writer;
+	//indexDocs(writer, docDir);
+}
+
+private static void indexFreq(DirectoryReader reader, int min, int max, String f, String path)
+{
+	IndexWriter writer = null;
+	try
+	{
+		writer = create_index_writer(path, IndexWriterConfig.OpenMode.CREATE);
+		indexFreqWriter(reader, writer, min, max, f);
+		writer.commit();
+		writer.close();
+	}
+	catch(Exception e)
+	{
+		System.out.println("Error al crear el índice");
+		return;
+	}
+}
+
+private static void indexFreqWriter(DirectoryReader reader, IndexWriter writer, int min, int max, String f)
+{
+	SlowCompositeReaderWrapper atomicReader;
+	try
+	{
+		atomicReader = new SlowCompositeReaderWrapper((CompositeReader) reader);
+
+		Fields fields = null;
+		Terms terms = null;
+		TermsEnum termsEnum = null;
+		HashSet<Integer> added = new HashSet<Integer>();
+		fields = atomicReader.fields();
+		for (String field : fields)
+		{
+			if(field.equals(f))
+			{
+				terms = fields.terms(field);
+				termsEnum = terms.iterator(null);
+				while (termsEnum.next() != null)
+				{
+					int docFreq = termsEnum.docFreq();
+					if((min >= 0) && (docFreq < min)) continue;
+					if((max >= 0) && (docFreq > max)) continue;
+					String tt = termsEnum.term().utf8ToString();
+					System.out.println(termsEnum.totalTermFreq() + "\t" + termsEnum.docFreq() + "\t" + tt);
+					DocsEnum docsEnum = termsEnum.docs(null, null);
+					int doc;
+					while ((doc = docsEnum.nextDoc()) != DocsEnum.NO_MORE_DOCS)
+					{
+						if(added.contains(doc)) continue;
+						
+						added.add(doc);
+						writer.addDocument(reader.document(doc));
+
+						//System.out.println(doc);
+					}
+				}
+			}
+		}
+		atomicReader.close();
+	}
+	catch(Exception e)
+	{
+		System.out.println("Error al abrir el índice");
+		return;
 	}
 }
 
