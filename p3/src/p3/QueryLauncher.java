@@ -36,6 +36,9 @@ import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.Version;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.store.Directory;
 
 public class QueryLauncher
 {
@@ -80,7 +83,7 @@ public class QueryLauncher
 		File file_index = null;
 		File file_out = null;
 		String showfield = null;
-		String out_path = null;
+		IndexWriter out = null;
 		Query query = null;
 
 		boolean index_status = false;
@@ -156,7 +159,7 @@ public class QueryLauncher
 					return;
 				}
 				
-				file_out = new File(path);
+				out = create_index_writer(path, IndexWriterConfig.OpenMode.CREATE);
 				i++;
 			}
 			else if("-query".equals(arg))
@@ -189,21 +192,53 @@ public class QueryLauncher
 			return;
 		}
 
-		search(searcher, query);
+		search(searcher, query, out);
+
+		if(out != null)
+		{
+			out.commit();
+			out.close();
+		}
 	}
 
-	private static void search(IndexSearcher searcher, Query query) throws IOException
+	private static IndexWriter create_index_writer(String indexPath,
+		IndexWriterConfig.OpenMode openMode) throws IOException
 	{
-		int hitsPerPage = 50;
+		Directory dir = FSDirectory.open(new File(indexPath));
+		Analyzer analyzer = new StandardAnalyzer(Version.LUCENE_40);
+		IndexWriterConfig iwc = new IndexWriterConfig(Version.LUCENE_40, analyzer);
+		iwc.setOpenMode(openMode);
+		iwc.setRAMBufferSizeMB(256.0);
+		IndexWriter writer = new IndexWriter(dir, iwc);
+
+		return writer;
+		//indexDocs(writer, docDir);
+	}
+
+	private static void search(IndexSearcher searcher, Query query,
+		IndexWriter out, String field) throws IOException
+	{
+		int hitsPerPage = 1;
 		TopDocs results = searcher.search(query, hitsPerPage);
 		ScoreDoc[] hits = results.scoreDocs;
 		int numTotalHits = results.totalHits;
 		
 		int end = Math.min(numTotalHits, hitsPerPage);
-		for(int i = 0; i < end; i++)
+		System.out.println("Hits: " + numTotalHits);
+		for(int i = 0; i < numTotalHits; i++)
 		{
-			Document doc = searcher.doc(hits[i].doc);
+			Document doc = searcher.doc(i);
 			System.out.println("Title: " + doc.get("title"));
+			if(field != null)
+			{
+				System.out.println("Doc id: "+doc);
+				System.out.println("Doc score: "+hits[i].score);
+				System.out.println(doc.get(field));
+			}
+			if(out != null)
+			{
+				out.addDocument(doc);
+			}
 		}
 	}
 
