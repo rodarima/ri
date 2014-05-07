@@ -23,12 +23,14 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Date;
+import java.util.ArrayList;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
@@ -39,6 +41,10 @@ import org.apache.lucene.util.Version;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.queryparser.classic.MultiFieldQueryParser;
+import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.BooleanClause.Occur;
 
 public class QueryLauncher
 {
@@ -177,6 +183,97 @@ public class QueryLauncher
 				query = parser.parse(query_txt);
 				i++;
 			}
+			else if("-multiquery".equals(arg))
+			{
+				if(query_status)
+				{
+					System.out.print("Opción de consulta ya especificada\n");
+					return;
+				}
+				query_status = true;
+				if(!testArgs(args, i, 2)) return;
+
+				ArrayList<String> fields_list = new ArrayList<String>();
+				ArrayList<String> queries_list = new ArrayList<String>();
+
+				i++;
+				
+				if(((args.length - i) % 2) != 0)
+				{
+					System.out.print("Opción -multiquery faltan argumentos\n");
+					return;
+				}
+
+				for(; i<args.length; i+=2)
+				{
+					fields_list.add(args[i]);
+					queries_list.add(args[i+1]);
+				}
+
+				String[] fields_array = new String[fields_list.size()];
+				fields_array = fields_list.toArray(fields_array);
+
+				String[] queries_array = new String[queries_list.size()];
+				queries_array = queries_list.toArray(queries_array);
+				MultiFieldQueryParser mfqp = new MultiFieldQueryParser(Version.LUCENE_40, fields_array, analyzer);
+				query = mfqp.parse(Version.LUCENE_40, queries_array, fields_array, analyzer);
+			}
+			else if("-progquery".equals(arg))
+			{
+				if(query_status)
+				{
+					System.out.print("Opción de consulta ya especificada\n");
+					return;
+				}
+				query_status = true;
+				if(!testArgs(args, i, 3)) return;
+
+				i++;
+				String field = args[i];
+				i++;
+				
+				BooleanQuery booleanQuery = new BooleanQuery();
+
+				if("-and".equals(args[i]))
+				{
+					i++;
+					for(; ((i<args.length) && (!("-or".equals(args[i]) || "-not".equals(args[i])))); i++)
+					{
+						Query q = new TermQuery(new Term(field, args[i]));
+						booleanQuery.add(q, Occur.MUST);
+					//	System.out.println("Adding AND "+args[i]);
+					}
+				}
+				
+				if((i<args.length) && "-or".equals(args[i]))
+				{
+					i++;
+					for(; ((i<args.length) && (!"-not".equals(args[i]))); i++)
+					{
+						Query q = new TermQuery(new Term(field, args[i]));
+						booleanQuery.add(q, Occur.SHOULD);
+					//	System.out.println("Adding OR "+args[i]);
+					}
+				}
+
+				if((i<args.length) && "-not".equals(args[i]))
+				{
+					i++;
+					for(; i<args.length; i++)
+					{
+						Query q = new TermQuery(new Term(field, args[i]));
+						booleanQuery.add(q, Occur.MUST_NOT);
+					//	System.out.println("Adding NOT "+args[i]);
+					}
+				}
+
+				query = booleanQuery;
+			}
+			else
+			{
+				System.out.print("Opción \""+arg+"\" desconocida\n");
+				return;
+			}
 		}
 
 
@@ -192,7 +289,7 @@ public class QueryLauncher
 			return;
 		}
 
-		search(searcher, query, out);
+		search(searcher, query, out, showfield);
 
 		if(out != null)
 		{
@@ -218,28 +315,33 @@ public class QueryLauncher
 	private static void search(IndexSearcher searcher, Query query,
 		IndexWriter out, String field) throws IOException
 	{
-		int hitsPerPage = 1;
-		TopDocs results = searcher.search(query, hitsPerPage);
-		ScoreDoc[] hits = results.scoreDocs;
-		int numTotalHits = results.totalHits;
 		
-		int end = Math.min(numTotalHits, hitsPerPage);
-		System.out.println("Hits: " + numTotalHits);
+		/* Carlos's hack */
+		int hitsPerPage = 1;
+		System.out.println("Consulta: " + query);
+		TopDocs results = searcher.search(query, hitsPerPage);
+
+		int numTotalHits = results.totalHits;
+		if(numTotalHits>0) results = searcher.search(query, numTotalHits);
+		ScoreDoc[] hits = results.scoreDocs;
+		/* End hack */
+		
 		for(int i = 0; i < numTotalHits; i++)
 		{
-			Document doc = searcher.doc(i);
-			System.out.println("Title: " + doc.get("title"));
+			Document doc = searcher.doc(hits[i].doc);
+			//System.out.println("Title: " + doc.get("title"));
+			
 			if(field != null)
 			{
-				System.out.println("Doc id: "+doc);
-				System.out.println("Doc score: "+hits[i].score);
-				System.out.println(doc.get(field));
+				System.out.println(hits[i].doc + "\t" + hits[i].score + "\t" + doc.get(field));
 			}
+
 			if(out != null)
 			{
 				out.addDocument(doc);
 			}
 		}
+		System.out.println("Resultados: " + numTotalHits);
 	}
 
 	public static boolean testArgs(String[] args, int i, int n)
